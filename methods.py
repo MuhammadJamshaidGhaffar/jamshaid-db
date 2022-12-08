@@ -1,5 +1,7 @@
 import aiofiles
 import uuid , os , json
+
+########## My Resources #######################
 from utility_functions import *
 
 ###################### GLOBAL VARIABLES #################
@@ -10,7 +12,7 @@ on_add_parameters = ['collection' , 'data']
 #########################################################
 class Get_Document:
     async def on_post(self, req, res):
-        on_get_delete_parameters = {"collection": False, "id": False, "range": False, "filters": False}
+        on_get_delete_parameters = {"collection": False, "_id": False, "range": False, "filters": False}
         # convert body json into python dictionary
         body = await req.get_media()
         if "range" not in body:
@@ -20,15 +22,15 @@ class Get_Document:
             if key in body:
                 on_get_delete_parameters[key] = True
         if not (on_get_delete_parameters["collection"]  and (
-                on_get_delete_parameters['id'] or (
+                on_get_delete_parameters['_id'] or (
                 on_get_delete_parameters['range'] and on_get_delete_parameters['filters']))):
             res.status = 404
             res.body = json.dumps({"msg:":"Invalid Parameters"})
             print("/document --- Put Request made with invalid parameters")
             return
         # 1 : if id is present
-        if on_get_delete_parameters['id']:
-            path = f"{basePath}/{body['collection']}/{body['id']}.json"
+        if on_get_delete_parameters['_id']:
+            path = f"{basePath}/{body['collection']}/{body['_id']}.json"
             try:
                 file = await aiofiles.open(path, 'r')
                 document = await file.read()
@@ -91,7 +93,7 @@ class Get_Document:
 class Document:
     async def on_post(self , req,res):
         print("Post request on /docment to create document")
-        on_get_delete_parameters = {"collection": False, "id": False, "range": False, "filters": False}
+        on_get_delete_parameters = {"collection": False, "_id": False, "range": False, "filters": False}
         #convert body json into python dictionary
         body = await req.get_media()
         if "range" not in body:
@@ -124,7 +126,7 @@ class Document:
             print(error)
             return
     async def on_put(self , req, res):
-        on_get_delete_parameters = {"collection": False, "id": False, "range": False, "filters": False}
+        on_get_delete_parameters = {"collection": False, "_id": False, "range": False, "filters": False}
         #convert body json into python dictionary
         body = await req.get_media()
         if "range" not in body:
@@ -134,20 +136,20 @@ class Document:
         for key in on_get_delete_parameters.keys():
             if key in body:
                 on_get_delete_parameters[key] = True
-        if not(on_get_delete_parameters["collection"] and on_get_delete_parameters['update'] and (on_get_delete_parameters['id'] or (on_get_delete_parameters['range'] and on_get_delete_parameters['filters']))):
+        if not(on_get_delete_parameters["collection"] and on_get_delete_parameters['update'] and (on_get_delete_parameters['_id'] or (on_get_delete_parameters['range'] and on_get_delete_parameters['filters']))):
             res.status = 404
-            res.text = json.dumps({"msg":"Invalid Parameters"})
+            res.text = json.dumps({"msg":"Invalid Parameter" , "query":on_get_delete_parameters})
             print("/document --- Put Request made with invalid parameters")
             return
         # 1 : if id is present
-        if on_get_delete_parameters['id']:
-            path = f"{basePath}/{body['collection']}/{body['id']}.json"
+        if on_get_delete_parameters['_id']:
+            path = f"{basePath}/{body['collection']}/{body['_id']}.json"
             try:
                 file = await aiofiles.open(path , 'r')
                 document = json.loads(await file.read())
                 await file.close()
-                for key, value in body['update'].items():
-                    document[key] = value
+                #update the document
+                document = updateDocument(document , body['update'])
 
                 json_document = json.dumps(document)
                 file = await aiofiles.open(path, 'w')
@@ -159,7 +161,7 @@ class Document:
             except Exception as error:
                 print(error)
                 res.status = 499
-                res.text = json.dumps({"msg":"Error in input/output of a file"})
+                res.text = json.dumps({"msg":error})
                 return
         # 2 : if id is not present
         elif on_get_delete_parameters['range'] and on_get_delete_parameters['filters'] :
@@ -194,9 +196,15 @@ class Document:
                 end = len_filtered_documents
             for i in range(start , end):
                 document = filtered_documents[i]
-                # update document object
-                for key , value in body['update'].items():
-                    document[key] = value
+                try:
+                    # update document object
+                    document = updateDocument(document , body['update'])
+                    filtered_documents[i] = document
+                except Exception as error:
+                    print("Error in updating document : ", error)
+                    continue
+                # for key , value in body['update'].items():
+                #     document[key] = value
                 json_document = json.dumps(document)
                 try:
                     file = await aiofiles.open(f"{path}{document['_id']}.json" , "w")
@@ -204,6 +212,7 @@ class Document:
                     await file.close()
                 except Exception as err:
                     print("Error while writing to file! " , err)
+
             # slice the doucments
             sliced_filtered_documents = filtered_documents[start:end]
             response = {}
@@ -214,7 +223,7 @@ class Document:
             res.text = json.dumps(json_response)
             return
     async def on_delete(self , req, res):
-        on_get_delete_parameters = {"collection": False, "id": False, "range": False, "filters": False}
+        on_get_delete_parameters = {"collection": False, "_id": False, "range": False, "filters": False}
         #convert body json into python dictionary
         body = await req.get_media()
         if "range" not in body:
@@ -223,14 +232,14 @@ class Document:
         for key in on_get_delete_parameters.keys():
             if key in body:
                 on_get_delete_parameters[key] = True
-        if not(on_get_delete_parameters["collection"]  and (on_get_delete_parameters['id'] or (on_get_delete_parameters['range'] and on_get_delete_parameters['filters']))):
+        if not(on_get_delete_parameters["collection"]  and (on_get_delete_parameters['_id'] or (on_get_delete_parameters['range'] and on_get_delete_parameters['filters']))):
             res.status = 404
             res.text = json.dumps({"msg":"Invalid Parameters"})
             print("/document --- Put Request made with invalid parameters")
             return
         # 1 : if id is present
-        if on_get_delete_parameters['id']:
-            path = f"{basePath}{body['collection']}/{body['id']}.json"
+        if on_get_delete_parameters['_id']:
+            path = f"{basePath}{body['collection']}/{body['_id']}.json"
             response = await delete_document(path)
             if response["is_deleted"]:
                 res.status = 200

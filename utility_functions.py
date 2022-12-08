@@ -1,5 +1,5 @@
 import aiofiles.os
-import os
+import os , copy
 
 
 def is_document_match_filters(document , filters):
@@ -112,4 +112,26 @@ async def delete_document(path):
             print(msg)
             print(path)
     return {"is_deleted":is_deleted , "msg":msg}
+
+def updateDocument(document , update):
+    copiedDocument = copy.copy(document)
+    for key , value in update.items():
+        if key not in copiedDocument:
+            copiedDocument[key] = value
+            continue
+        if isinstance(value,list) and isinstance(value[0] , str) and value[0][0] == "$":
+            if len(value) == 1:
+                raise Exception(F"A list of values on which ${value[0]} is to be performed must be present")
+            if value[0] == "$push" and isinstance(value[1] , list):
+                for items in value[1]:
+                    copiedDocument[key].append(items)
+            elif value[0] == "$insert" and isinstance(value[1] , int) and isinstance(value[2] , list):
+                for items in reversed(value[2]):
+                    copiedDocument[key].insert(value[1] , items)
+            elif value[0] == "$update_obj" and isinstance(value[1] , dict) :
+                copiedDocument[key] = updateDocument(document[key] , value[1])
+
+        else:
+            copiedDocument[key] = value
+    return copiedDocument
 
