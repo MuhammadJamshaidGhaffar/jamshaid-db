@@ -1,0 +1,1 @@
+uvicorn db:app --reload --port 5000
