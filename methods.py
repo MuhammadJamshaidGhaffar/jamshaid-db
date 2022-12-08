@@ -12,11 +12,13 @@ on_add_parameters = ['collection' , 'data']
 #########################################################
 class Get_Document:
     async def on_post(self, req, res):
-        on_get_delete_parameters = {"collection": False, "_id": False, "range": False, "filters": False}
+        on_get_delete_parameters = {"collection": False, "_id": False, "range": False , "output":False , "filters": False}
         # convert body json into python dictionary
         body = await req.get_media()
         if "range" not in body:
             body["range"] = [0,-1]
+        if "output" not in body:
+            body["output"] = "*"
         # check if body satisfies the parameters
         for key in on_get_delete_parameters.keys():
             if key in body:
@@ -25,7 +27,7 @@ class Get_Document:
                 on_get_delete_parameters['_id'] or (
                 on_get_delete_parameters['range'] and on_get_delete_parameters['filters']))):
             res.status = 404
-            res.body = json.dumps({"msg:":"Invalid Parameters"})
+            res.body = json.dumps({"msg":"Invalid Parameters" , "query" : on_get_delete_parameters})
             print("/document --- Put Request made with invalid parameters")
             return
         # 1 : if id is present
@@ -35,13 +37,22 @@ class Get_Document:
                 file = await aiofiles.open(path, 'r')
                 document = await file.read()
                 await file.close()
-                res.status = 200
-                res.body = document
-                return
+                document = json.loads(document)
+                # now format the document according to the output format
+                try:
+                    document = outputDocument(document , body['output'])
+                    res.status = 200
+                    res.text = json.dumps(document)
+                    return
+                except Exception as error:
+                    print(error)
+                    res.status = 404
+                    res.text = json.dumps({"msg":str(error)})
+                    return
             except Exception as error:
                 print(error)
                 res.status = 499
-                res.body = json.dumps({"msg:": "Error in reading the file"})
+                res.body = json.dumps({"msg:": error})
                 return
         # 2 : if id is not present
         elif on_get_delete_parameters['range'] and on_get_delete_parameters['filters']:
@@ -67,9 +78,19 @@ class Get_Document:
                         continue
                     print("Document Matched : " , document)
                     # if document matched against filters
+                    # now format the document according to the output format
+                    try:
+                        document = outputDocument(document, body['output'])
+                    except Exception as error:
+                        print("Error in formating output " , error)
+                        res.status = 404
+                        res.text = json.dumps({"msg": str(error)})
+                        return
+                    # now append the document to filetered documents list
                     filtered_documents.append(document)
                 except Exception as error:
                     print(f"Failed I/o in file {path}{document_id}")
+                    print(error)
             #now all documents have read and filtered
             #now it's time to slice the filtered list for specific range
             print("All Matched Documents are :" , filtered_documents)
@@ -93,7 +114,6 @@ class Get_Document:
 class Document:
     async def on_post(self , req,res):
         print("Post request on /docment to create document")
-        on_get_delete_parameters = {"collection": False, "_id": False, "range": False, "filters": False}
         #convert body json into python dictionary
         body = await req.get_media()
         if "range" not in body:
@@ -102,7 +122,7 @@ class Document:
         for key in on_add_parameters:
             if key not in body.keys():
                 res.status = 404
-                res.text = json.dumps({"msg":"Invalid Parameters"})
+                res.text = json.dumps({"msg":f"Invalid Parameters\n{key} is missing in query"})
                 return
         # create directory if not exists
         path = basePath+ body['collection']
@@ -112,17 +132,17 @@ class Document:
         path = path + f"/{id}.json"
         #open file in write binary mode
         try:
-            document = body['data']
+            document = json.dumps(body['data'])
             document['_id'] = id
             file = await aiofiles.open(path , 'w')
-            await file.write(json.dumps(document))
+            await file.write(document)
             await file.close()
             res.status = 200
-            res.text = json.dumps({"msg":"Document Created successfully"})
+            res.text = json.dumps({"msg":document})
             return
         except Exception as error:
             res.status = 500
-            res.text = json.dumps({"msg":"Failed to open the file"})
+            res.text = json.dumps({"msg":str(error)})
             print(error)
             return
     async def on_put(self , req, res):
@@ -161,7 +181,7 @@ class Document:
             except Exception as error:
                 print(error)
                 res.status = 499
-                res.text = json.dumps({"msg":error})
+                res.text = json.dumps({"msg":str(error)})
                 return
         # 2 : if id is not present
         elif on_get_delete_parameters['range'] and on_get_delete_parameters['filters'] :
@@ -234,7 +254,7 @@ class Document:
                 on_get_delete_parameters[key] = True
         if not(on_get_delete_parameters["collection"]  and (on_get_delete_parameters['_id'] or (on_get_delete_parameters['range'] and on_get_delete_parameters['filters']))):
             res.status = 404
-            res.text = json.dumps({"msg":"Invalid Parameters"})
+            res.text = json.dumps({"msg":"Invalid Parameters" , "query": on_get_delete_parameters})
             print("/document --- Put Request made with invalid parameters")
             return
         # 1 : if id is present
@@ -245,7 +265,7 @@ class Document:
                 res.status = 200
             else:
                 res.status = 404
-            res.text = json.dumps({"msg":response["msg"]})
+            res.text = json.dumps({"msg":response})
             return
         # 2 : if id is not present
         elif on_get_delete_parameters['range'] and on_get_delete_parameters['filters'] :
@@ -272,7 +292,7 @@ class Document:
                     filtered_documents.append(document)
 
                 except Exception as error:
-                    print(f"Failed in reading the document {path}{document_id}")
+                    print(f"Failed in reading the document {path}{document_id}" , error)
             #now delete the documents which falls in range
             print("Deleting the documents")
             start = body['range'][0]

@@ -116,22 +116,48 @@ async def delete_document(path):
 def updateDocument(document , update):
     copiedDocument = copy.copy(document)
     for key , value in update.items():
-        if key not in copiedDocument:
-            copiedDocument[key] = value
-            continue
         if isinstance(value,list) and isinstance(value[0] , str) and value[0][0] == "$":
             if len(value) == 1:
                 raise Exception(F"A list of values on which ${value[0]} is to be performed must be present")
             if value[0] == "$push" and isinstance(value[1] , list):
+                if key not in copiedDocument:
+                    copiedDocument[key] = value[1]
+                    continue
                 for items in value[1]:
                     copiedDocument[key].append(items)
             elif value[0] == "$insert" and isinstance(value[1] , int) and isinstance(value[2] , list):
+                if key not in copiedDocument:
+                    copiedDocument[key] = value[2]
+                    continue
                 for items in reversed(value[2]):
                     copiedDocument[key].insert(value[1] , items)
             elif value[0] == "$update_obj" and isinstance(value[1] , dict) :
+                if key not in copiedDocument:
+                    copiedDocument[key] = value[1]
+                    continue
                 copiedDocument[key] = updateDocument(document[key] , value[1])
 
         else:
             copiedDocument[key] = value
     return copiedDocument
 
+def outputDocument(document , output_filters):
+    if output_filters == "*":
+        return document
+    else:
+        output_document = {}
+        for key, value in output_filters.items():
+            #if key doesn't exist in document
+            if key not in document:
+                print("Error !" ,document , key ,  value)
+                raise Exception(f"{key} doesn't exist in document")
+            # if value is dict then go for nested loop
+            if isinstance(value , dict) and isinstance(document[key] , dict):
+                output_document[key] = outputDocument(document[key] , value)
+            # but if value is 1 or * then return whole value no matter what type of value is
+            elif value == 1 or value == "*":
+                output_document[key] = document[key]
+            else:
+                raise Exception(f"Invalid value for {key}")
+
+        return output_document
