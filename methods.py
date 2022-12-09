@@ -52,7 +52,7 @@ class Get_Document:
             except Exception as error:
                 print(error)
                 res.status = 499
-                res.body = json.dumps({"msg:": error})
+                res.body = json.dumps({"msg:": str(error)})
                 return
         # 2 : if id is not present
         elif on_get_delete_parameters['range'] and on_get_delete_parameters['filters']:
@@ -102,7 +102,7 @@ class Get_Document:
             sliced_filtered_documents = filtered_documents[start:end]
             response = {}
             response["documents"] = sliced_filtered_documents
-            response["remaining"] =  filtered_documents_length- end
+            response["remaining"] =  filtered_documents_length- len(sliced_filtered_documents)
             json_response = json.dumps(response)
             res.status = 200
             res.body = json.dumps(json_response)
@@ -116,8 +116,6 @@ class Document:
         print("Post request on /docment to create document")
         #convert body json into python dictionary
         body = await req.get_media()
-        if "range" not in body:
-            body["range"] = [0,-1]
         # check if body satifies the parameters
         for key in on_add_parameters:
             if key not in body.keys():
@@ -132,13 +130,14 @@ class Document:
         path = path + f"/{id}.json"
         #open file in write binary mode
         try:
-            document = json.dumps(body['data'])
+            document = body['data']
             document['_id'] = id
+            document = json.dumps(document)
             file = await aiofiles.open(path , 'w')
             await file.write(document)
             await file.close()
             res.status = 200
-            res.text = json.dumps({"msg":document})
+            res.text = document
             return
         except Exception as error:
             res.status = 500
@@ -146,13 +145,12 @@ class Document:
             print(error)
             return
     async def on_put(self , req, res):
-        on_get_delete_parameters = {"collection": False, "_id": False, "range": False, "filters": False}
+        on_get_delete_parameters = {"collection": False, "_id": False, "range": False, "filters": False , "update":False}
         #convert body json into python dictionary
         body = await req.get_media()
         if "range" not in body:
             body["range"] = [0,-1]
         #check if body satisfies the parameters
-        on_get_delete_parameters['update'] = False
         for key in on_get_delete_parameters.keys():
             if key in body:
                 on_get_delete_parameters[key] = True
@@ -223,8 +221,6 @@ class Document:
                 except Exception as error:
                     print("Error in updating document : ", error)
                     continue
-                # for key , value in body['update'].items():
-                #     document[key] = value
                 json_document = json.dumps(document)
                 try:
                     file = await aiofiles.open(f"{path}{document['_id']}.json" , "w")
@@ -237,7 +233,7 @@ class Document:
             sliced_filtered_documents = filtered_documents[start:end]
             response = {}
             response["documents"] = sliced_filtered_documents
-            response["remaining"] = len_filtered_documents - end
+            response["remaining"] = len_filtered_documents - len(sliced_filtered_documents)
             json_response = json.dumps(response)
             res.status = 200
             res.text = json.dumps(json_response)
@@ -265,7 +261,7 @@ class Document:
                 res.status = 200
             else:
                 res.status = 404
-            res.text = json.dumps({"msg":response})
+            res.text = json.dumps(response)
             return
         # 2 : if id is not present
         elif on_get_delete_parameters['range'] and on_get_delete_parameters['filters'] :
@@ -308,17 +304,14 @@ class Document:
 
                 print("deleting the document " , path)
                 # delete document object
-                response = None
-                try:
-                    response = await delete_document(path)
-                except Exception as error:
-                    print(error)
-                response["document"] = document
+                response = await delete_document(path)
+                if response["is_deleted"]:
+                    response["document"] = document
                 deleted_documents.append(response)
-            sliced_filtered_documents = filtered_documents[start:end]
+            print("here")
             response = {}
-            response["documents"] = sliced_filtered_documents
-            response["remaining"] = len_filtered_documents - end
+            response["documents"] = deleted_documents
+            response["remaining"] = len_filtered_documents - len(deleted_documents)
             json_response = json.dumps(response)
             res.status = 200
             res.body = json.dumps(json_response)

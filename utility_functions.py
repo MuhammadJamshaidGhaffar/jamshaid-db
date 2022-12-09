@@ -87,7 +87,7 @@ def is_document_match_filters(document , filters):
                         break
 
     except Exception as error:
-        print(f"Error while matching document with filters.Maybe prop is not present in document")
+        print(f"Error while matching document with filters.Maybe prop is not present in document" )
         print(error)
         matched = False
     return matched
@@ -107,7 +107,7 @@ async def delete_document(path):
             print(msg)
             print(path)
         except Exception as error:
-            msg = "Failed to delete the document " , error
+            msg = "Failed to delete the document " + error
             is_deleted = False
             print(msg)
             print(path)
