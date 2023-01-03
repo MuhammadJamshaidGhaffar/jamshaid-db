@@ -12,6 +12,7 @@ on_add_parameters = ['collection' , 'data']
 #########################################################
 class Get_Document:
     async def on_post(self, req, res):
+        print("Call to get_document")
         on_get_delete_parameters = {"collection": False, "_id": False, "range": False , "output":False , "filters": False}
         # convert body json into python dictionary
         body = await req.get_media()
@@ -30,6 +31,10 @@ class Get_Document:
             res.body = json.dumps({"msg":"Invalid Parameters" , "query" : on_get_delete_parameters})
             print("/document --- Put Request made with invalid parameters")
             return
+        # create directory if not exists
+        path = basePath + body['collection']
+        if not os.path.exists(path):
+            os.makedirs(path)
         # 1 : if id is present
         if on_get_delete_parameters['_id']:
             path = f"{basePath}/{body['collection']}/{body['_id']}.json"
@@ -102,7 +107,8 @@ class Get_Document:
             sliced_filtered_documents = filtered_documents[start:end]
             response = {}
             response["documents"] = sliced_filtered_documents
-            response["remaining"] =  filtered_documents_length- len(sliced_filtered_documents)
+            #response["remaining"] =  filtered_documents_length- len(sliced_filtered_documents)
+            response["remaining"] =  filtered_documents_length - end
             json_response = json.dumps(response)
             res.status = 200
             res.body = json.dumps(json_response)

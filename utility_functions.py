@@ -18,6 +18,16 @@ def is_document_match_filters(document , filters):
                 if not matched:
                     break
                 continue
+            if key == "$and" and isinstance(value , list):
+                # and operator , it is in document space so it does not mean it is nested, it checks for props in document space
+                matched = True
+                for valueItems in value:
+                    if not is_document_match_filters(document , valueItems):
+                        matched = False
+                        break
+                if not matched:
+                    break
+                continue
             # checking if current value is list
             # if it is not list
             if not isinstance(value, list):
@@ -26,7 +36,7 @@ def is_document_match_filters(document , filters):
                     break
             else: # if it is list
                 # it is checking if first element of list is string and it is also an operator
-                if isinstance(value[0] , str) and value[0][0] == "$" :
+                if isinstance(value[0] , str) and value[0][0] == "$"  :
                     operator = value[0]
                     values = value[1]
                     if operator == "$filters" and isinstance(values , dict):
@@ -46,9 +56,15 @@ def is_document_match_filters(document , filters):
                     # set matched = false and loop through all values in list
                     # if not matched after looping though all values in list
                     # then break the outer loop
+
                     for valueItem in values:
                         if operator == "$eq":
                             if valueItem == document[key]:
+                                matched = True
+                                break
+                        elif operator == "$in" and isinstance(document[key], list):
+                            print("checking")
+                            if valueItem in document[key]:
                                 matched = True
                                 break
                         elif operator == "$substring" and isinstance(document[key], str):
@@ -116,15 +132,24 @@ async def delete_document(path):
 def updateDocument(document , update):
     copiedDocument = copy.copy(document)
     for key , value in update.items():
-        if isinstance(value,list) and isinstance(value[0] , str) and value[0][0] == "$":
+        if isinstance(value,list) and len(value) != 0 and isinstance(value[0] , str) and len(value[0]) !=0 and value[0][0] == "$":
+
             if len(value) == 1:
                 raise Exception(F"A list of values on which ${value[0]} is to be performed must be present")
-            if value[0] == "$push" and isinstance(value[1] , list):
+            if (value[0] == "$push" or value[0] == "$append" ) and isinstance(value[1] , list):
                 if key not in copiedDocument:
                     copiedDocument[key] = value[1]
                     continue
                 for items in value[1]:
                     copiedDocument[key].append(items)
+            elif value[0] == "$remove" and isinstance(value[1] , list):
+                if key not in copiedDocument:
+                    continue
+                if type(document[key]) != list:
+                    raise Exception(f"Document[key] = {document[key]} is not a list")
+                for item in value[1]:
+                    if item in document[key]:
+                        copiedDocument[key].remove(item)
             elif value[0] == "$insert" and isinstance(value[1] , int) and isinstance(value[2] , list):
                 if key not in copiedDocument:
                     copiedDocument[key] = value[2]
